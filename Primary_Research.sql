@@ -1,4 +1,4 @@
-/*View the data sets*/
+/*View the data set*/
 
 SELECT * FROM EV_Sales_by_Makers;
 SELECT * FROM EV_sales_by_state;
@@ -6,7 +6,7 @@ SELECT * FROM EV_sales_by_state;
 /*List the top 3 and bottom 3 makers for the fiscal years 2023 and 2024 in 
 terms of the number of 2-wheelers sold.*/
 
-/*Listing down the TOP 3 makers*/
+/*Listing down the TOP 3 makers for 2-Wheelers*/
 
 SELECT 
     TOP 3 maker, 
@@ -25,7 +25,26 @@ GROUP BY
 ORDER BY 
     Total DESC;
 
-/*Listing down BOTTOM 3 makers*/
+/*Listing down the TOP 3 makers for 4-Wheelers*/
+
+SELECT 
+    TOP 3 maker, 
+    SUM(electric_vehicles_sold) AS Total
+FROM 
+    EV_Sales_by_Makers
+JOIN 
+    Dim_Date dd
+ON 
+    dd.date = EV_Sales_by_Makers.date
+WHERE 
+    dd.fiscal_year in (2023,2024)
+    AND EV_Sales_by_Makers.vehicle_category = '4-Wheelers' 
+GROUP BY 
+    maker
+ORDER BY 
+    Total DESC;
+
+/*Listing down BOTTOM 3 makers for 2-Wheelers*/
 
 SELECT 
     TOP 3 maker, 
@@ -44,6 +63,24 @@ GROUP BY
 ORDER BY 
     Total ASC;
 
+/*Listing down BOTTOM 3 makers for 4-Wheelers*/
+
+SELECT 
+    TOP 3 maker, 
+    SUM(electric_vehicles_sold) AS Total
+FROM 
+    EV_Sales_by_Makers
+JOIN 
+    Dim_Date dd
+ON 
+    dd.date = EV_Sales_by_Makers.date
+WHERE 
+    dd.fiscal_year in (2023,2024)
+    AND EV_Sales_by_Makers.vehicle_category = '4-Wheelers' 
+GROUP BY 
+    maker
+ORDER BY 
+    Total ASC;
 
 /*Identify the top 5 states with the highest penetration rate in 2-wheeler 
 and 4-wheeler EV sales in FY 2024.*/
@@ -57,6 +94,30 @@ ON
     dd.date= esbs.date
 WHERE dd.fiscal_year in (2024) AND
 vehicle_category = '4-Wheelers'
+GROUP BY state
+ORDER BY penetration_rate DESC;
+
+SELECT
+     TOP 5 state, 
+     round(sum(electric_vehicles_sold)*100.0/sum(total_vehicles_sold),2)AS penetration_rate
+FROM EV_sales_by_state esbs
+JOIN Dim_Date dd
+ON
+    dd.date= esbs.date
+WHERE dd.fiscal_year in (2024) AND
+vehicle_category = '2-Wheelers'
+GROUP BY state
+ORDER BY penetration_rate DESC;
+
+SELECT
+     TOP 5 state, 
+     round(sum(electric_vehicles_sold)*100.0/sum(total_vehicles_sold),2)AS penetration_rate
+FROM EV_sales_by_state esbs
+JOIN Dim_Date dd
+ON
+    dd.date= esbs.date
+WHERE dd.fiscal_year in (2024) AND
+vehicle_category = '2-Wheelers'
 GROUP BY state
 ORDER BY penetration_rate DESC;
 
@@ -89,28 +150,44 @@ WHERE
 /*What are the quarterly trends based on sales volume for the top 5 EV 
 makers (4-wheelers) from 2022 to 2024*/
 
-WITH top5
-     AS (SELECT TOP 5 maker,
-                      Sum(electric_vehicles_sold) AS total
-         FROM   ev_sales_by_makers esbm
-                JOIN dim_date dd
-                  ON dd.date = esbm.date
-         WHERE  dd.fiscal_year BETWEEN 2022 AND 2024
-                AND vehicle_category = '4-Wheelers'
-         GROUP  BY maker
-         ORDER  BY total DESC)
+WITH top5 AS (
+    SELECT TOP 5 
+        maker,
+        SUM(electric_vehicles_sold) AS total
+    FROM 
+        EV_Sales_by_Makers esbm
+    JOIN 
+        Dim_Date dd ON dd.date = esbm.date
+    WHERE 
+        dd.fiscal_year BETWEEN 2022 AND 2024
+        AND esbm.vehicle_category = '4-Wheelers'
+    GROUP BY 
+        maker
+    ORDER BY 
+        total DESC
+)
 
-SELECT dd.fiscal_year,
-       dd.quarter,
-       t5.maker
-FROM   top5 AS t5
-       JOIN ev_sales_by_makers esbm
-         ON esbm.maker = t5.maker
-       JOIN dim_date dd
-         ON dd.date = esbm.date
-WHERE  dd.fiscal_year BETWEEN 2022 AND 2024
-ORDER  BY dd.fiscal_year,
-          dd.quarter; 
+SELECT 
+    dd.fiscal_year,
+    dd.quarter,
+    t5.maker,
+    SUM(esbm.electric_vehicles_sold) AS quarterly_sales
+FROM   
+    top5 AS t5
+JOIN 
+    EV_Sales_by_Makers esbm ON esbm.maker = t5.maker
+JOIN 
+    Dim_Date dd ON dd.date = esbm.date
+WHERE  
+    dd.fiscal_year BETWEEN 2022 AND 2024
+GROUP BY 
+    dd.fiscal_year,
+    dd.quarter,
+    t5.maker
+ORDER BY 
+    dd.fiscal_year,
+    dd.quarter,
+    t5.maker;
 
 /*How do the EV sales and penetration rates in Delhi compare to 
 Karnataka for 2024?*/
@@ -256,7 +333,7 @@ CAGR AS (
     GROUP BY 
         state
 )
-/*Project sales in 2030*/
+/*projected*/
 SELECT 
     top10.state,
     top10.EV_Sales_2024,
@@ -271,12 +348,7 @@ ORDER BY
 
 /*Estimate the revenue growth rate of 4-wheeler and 2-wheelers 
 EVs in India for 2022 vs 2024 and 2023 vs 2024, assuming an average 
-unit price
-
-2-Wheelers    INR 85,000
-4-Wheelers    INR 1500000 */
-
-/* First calculating the total 4-Wheelers and 2-Wheelers sales for each year */
+unit price*/
 
 WITH sales_summary AS (
     SELECT 
@@ -310,28 +382,34 @@ revenue_summary AS (
 /* Calculating Revenue Growth Rates */
 growth_rate AS (
     SELECT 
-        a.vehicle_category,
-        a.revenue AS revenue_2022,
-        b.revenue AS revenue_2023,
-        c.revenue AS revenue_2024,
-        ROUND((NULLIF(c.revenue, 0) - NULLIF(a.revenue, 0)) / NULLIF(a.revenue, 0) * 100, 2) AS growth_2022_2024,
-        ROUND((NULLIF(c.revenue, 0) - NULLIF(b.revenue, 0)) / NULLIF(b.revenue, 0) * 100, 2) AS growth_2023_2024
+        rev_2022.vehicle_category,
+        rev_2022.revenue AS revenue_2022,
+        rev_2023.revenue AS revenue_2023,
+        rev_2024.revenue AS revenue_2024,
+        (CAST(rev_2024.revenue AS FLOAT) - CAST(rev_2022.revenue AS FLOAT))*100.00 
+/ CAST(rev_2022.revenue AS FLOAT) AS growth_2022_2024,
+
+(CAST(rev_2024.revenue AS FLOAT) - CAST(rev_2023.revenue AS FLOAT))*100.00 
+/ CAST(rev_2023.revenue AS FLOAT) AS growth_2023_2024
+
     FROM 
-        revenue_summary a
+        revenue_summary rev_2022
     JOIN 
-        revenue_summary b ON a.vehicle_category = b.vehicle_category AND b.fiscal_year = 2023
+        revenue_summary rev_2023 ON rev_2022.vehicle_category = rev_2023.vehicle_category AND rev_2023.fiscal_year = 2023
     JOIN 
-        revenue_summary c ON a.vehicle_category = c.vehicle_category AND c.fiscal_year = 2024
+        revenue_summary rev_2024 ON rev_2022.vehicle_category = rev_2024.vehicle_category AND rev_2024.fiscal_year = 2024
     WHERE 
-        a.fiscal_year = 2022
+        rev_2022.fiscal_year = 2022
 )
 
+/* Final Output */
 SELECT 
     vehicle_category,
     revenue_2022,
     revenue_2023,
     revenue_2024,
-    growth_2022_2024 AS "Growth Rate 2022 vs 2024 (%)",
-    growth_2023_2024 AS "Growth Rate 2023 vs 2024 (%)"
+    growth_2022_2024 AS "Growth Rate 2022-2024 (%)",
+    growth_2023_2024 AS "Growth Rate 2023-2024 (%)"
 FROM 
     growth_rate;
+
