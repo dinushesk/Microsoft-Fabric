@@ -402,7 +402,7 @@ growth_rate AS (
         rev_2022.fiscal_year = 2022
 )
 
-/* Final Output */
+/* Summarize Table */
 SELECT 
     vehicle_category,
     revenue_2022,
